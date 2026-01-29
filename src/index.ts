@@ -58,25 +58,8 @@ async function getAddress(streetAddress: string, townId: number): Promise<Addres
   return data[0];
 }
 
-interface Building {
-  code_adr: string;
-  longitude: number;
-  latitude: number;
-  nom_commune: string;
-}
-
-async function getBuilding(buildingId: number): Promise<Building> {
-  const data = (await arcepFetch("/immeubles/immeuble", {
-    immeubleid: String(buildingId),
-  })) as Building;
-  if (!data.code_adr) {
-    throw new Error(`No address code found for building: ${buildingId}`);
-  }
-  return data;
-}
-
-async function getFixedLineEligibilities(addressCode: string): Promise<unknown> {
-  return arcepFetch("/eligibilites/fixe", { codeadr: addressCode });
+async function getFixedLineEligibilities(buildingId: number): Promise<unknown> {
+  return arcepFetch("/eligibilites/fixe_id", { immeubleid: String(buildingId) });
 }
 
 async function getFixedLineEligibilitiesByAddress(
@@ -85,8 +68,7 @@ async function getFixedLineEligibilitiesByAddress(
 ): Promise<string> {
   const town = await getTown(townName);
   const address = await getAddress(streetAddress, town.comid);
-  const building = await getBuilding(address.immeubleid);
-  const eligibilities = await getFixedLineEligibilities(building.code_adr);
+  const eligibilities = await getFixedLineEligibilities(address.immeubleid);
   return JSON.stringify(eligibilities, null, 2);
 }
 
