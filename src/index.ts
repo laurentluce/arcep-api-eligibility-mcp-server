@@ -58,6 +58,22 @@ async function getAddress(streetAddress: string, townId: number): Promise<Addres
   return data[0];
 }
 
+interface Building {
+  srid: number;
+  x: number;
+  y: number;
+}
+
+async function getBuilding(buildingId: number): Promise<Building> {
+  const data = (await arcepFetch("/immeubles/immeuble", {
+    immeubleid: String(buildingId),
+  })) as Building;
+  if (!data.x || !data.y) {
+    throw new Error(`No coordinates found for building: ${buildingId}`);
+  }
+  return data;
+}
+
 async function getFixedLineEligibilities(buildingId: number): Promise<unknown> {
   return arcepFetch("/eligibilites/fixe_id", { immeubleid: String(buildingId) });
 }
@@ -69,6 +85,25 @@ async function getFixedLineEligibilitiesByAddress(
   const town = await getTown(townName);
   const address = await getAddress(streetAddress, town.comid);
   const eligibilities = await getFixedLineEligibilities(address.immeubleid);
+  return JSON.stringify(eligibilities, null, 2);
+}
+
+async function getMobileEligibilities(srid: number, x: number, y: number): Promise<unknown> {
+  return arcepFetch("/eligibilites/mobile", {
+    srid: String(srid),
+    x: String(x),
+    y: String(y),
+  });
+}
+
+async function getMobileEligibilitiesByAddress(
+  streetAddress: string,
+  townName: string
+): Promise<string> {
+  const town = await getTown(townName);
+  const address = await getAddress(streetAddress, town.comid);
+  const building = await getBuilding(address.immeubleid);
+  const eligibilities = await getMobileEligibilities(building.srid, building.x, building.y);
   return JSON.stringify(eligibilities, null, 2);
 }
 
@@ -87,6 +122,29 @@ server.tool(
   async ({ streetAddress, townName }) => {
     try {
       const result = await getFixedLineEligibilitiesByAddress(streetAddress, townName);
+      return {
+        content: [{ type: "text", text: result }],
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        content: [{ type: "text", text: `Error: ${message}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+server.tool(
+  "get_mobile_eligibilities",
+  "Get mobile eligibilities for an address from the ARCEP API.",
+  {
+    streetAddress: z.string().describe("The street address to look up (e.g. '10 rue de la Paix')"),
+    townName: z.string().describe("The town/commune name (e.g. 'Paris')"),
+  },
+  async ({ streetAddress, townName }) => {
+    try {
+      const result = await getMobileEligibilitiesByAddress(streetAddress, townName);
       return {
         content: [{ type: "text", text: result }],
       };
